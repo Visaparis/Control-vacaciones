@@ -18,18 +18,12 @@
 
     <div class="top-actions">
       <button class="btn ghost" id="btn-help">Ayuda</button>
-      <button class="btn ghost" id="btn-quick-ios" title="Atajo para iPhone/iPad (Safari): exporta el JSON con nombre fijo para guardarlo en iCloud">iPhone/iPad (Safari)</button>
-      <button class="btn ghost" id="btn-quick-win" title="Atajo para Windows (Chrome/Edge): vincula un JSON en tu nube y activa autoguardado">Windows (Chrome)</button>
-      <button class="btn ghost" id="btn-export" title="Exporta un JSON (puedes guardarlo en iCloud).">Exportar JSON</button>
-      <label class="btn ghost file">
-        Importar JSON
-        <input type="file" id="file-import" accept="application/json" />
-      </label>
-      <span class="divider"></span>
-      <button class="btn primary" id="btn-open-file" title="Chromium/Edge/Chrome: vincula un archivo JSON en tu nube para guardar con 1 clic">Vincular archivo</button>
-      <button class="btn primary" id="btn-save-file" disabled>Guardar</button>
+      <button class="btn ghost" id="btn-export" title="Exporta un JSON (guárdalo en iCloud).">Exportar JSON</button>
+      <button class="btn ghost" id="btn-import" title="Importa el JSON guardado en iCloud. En Windows (Chrome/Edge) además activa autoguardado sobre ese archivo.">Importar JSON</button>
+      <input type="file" id="file-import" accept="application/json" class="hidden" />
     </div>
-    <div id="win-autosave-hint" class="mini-hint hidden">Pulsa <strong>“Windows (Chrome)”</strong> para activar autoguardado</div>
+    <div id="win-autosave-hint" class="mini-hint hidden">Para activar autoguardado: pulsa <strong>“Importar JSON”</strong> y elige <strong>vacaciones_data.json</strong> desde iCloud.</div>
+    <div id="ios-export-hint" class="mini-hint hidden">⚠️ Recuerda <strong>Exportar JSON</strong> para guardar los cambios en iCloud.</div>
   </header>
 
   <main class="layout">

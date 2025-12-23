@@ -18,6 +18,24 @@ const TYPE_META = {
 
 const STORAGE_KEY = "vacaciones_app_v1";
 
+// Plataforma (iOS usa WebKit y no soporta File System Access API)
+const isIOS = (()=>{
+  const ua = navigator.userAgent || '';
+  const iOS = /iPad|iPhone|iPod/.test(ua);
+  const iPadOS = /Macintosh/.test(ua) && ('ontouchend' in document);
+  return iOS || iPadOS;
+})();
+
+function showIOSExportHint(show){
+  const n = document.getElementById('ios-export-hint');
+  if(!n) return;
+  n.classList.toggle('hidden', !show);
+}
+
+function markIOSDirty(){
+  if(isIOS) showIOSExportHint(true);
+}
+
 function pad2(n){ return String(n).padStart(2,"0"); }
 function toISODate(d){
   // d is Date
@@ -169,29 +187,35 @@ async function linkFile(){
       types: [{ description: "JSON", accept: {"application/json": [".json"]}}],
     });
     document.querySelector("#btn-save-file").disabled = false;
-    await saveToLinkedFile(); // first save
+    await saveToActiveFile(); // first save
   }catch(e){
     if(e?.name !== "AbortError") console.error(e);
   }
 }
-async function saveToLinkedFile(opts = {}){
+async function saveToActiveFile(opts = {}){
   if(!fileHandle) return;
   try{
+    // Intentar pedir permisos (algunos Chromium lo requieren tras reinicios)
+    if(fileHandle.requestPermission){
+      const perm = await fileHandle.requestPermission({mode:'readwrite'});
+      if(perm !== 'granted') throw new Error('Permiso no concedido');
+    }
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(state, null, 2));
     await writable.close();
-    if(!opts.silent) toast("Guardado en archivo ✅");
+    if(!opts.silent) toast("Guardado ✅");
   }catch(e){
     console.error(e);
-    alert("No se pudo guardar en el archivo. Prueba Exportar JSON.");
+    alert("No se pudo guardar en el archivo activo. Usa Exportar JSON.");
   }
 }
 
 async function autoSaveIfLinked(){
-  // Autoguardado suave: si hay archivo vinculado, guarda sin molestar.
-  if(!fileHandle) return;
-  await saveToLinkedFile({silent:true});
+  // Autoguardado: solo si hay archivo activo y estamos en Windows (no iOS).
+  if(!fileHandle || isIOS) return;
+  await saveToActiveFile({silent:true});
 }
+
 
 function toast(msg){
   // simple toast
@@ -597,7 +621,7 @@ function startEdit(id){
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function stopEdit(){
@@ -656,12 +680,13 @@ function upsertEntry(){
   }
 
   saveState();
+  markIOSDirty();
   // Si el usuario vinculó un JSON (Windows Chrome/Edge), autoguardamos.
   autoSaveIfLinked();
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function deleteEntry(){
@@ -672,13 +697,14 @@ function deleteEntry(){
   if(!ok) return;
   state.entries = state.entries.filter(e=> e.id !== editingId);
   saveState();
+  markIOSDirty();
   autoSaveIfLinked();
   toast("Eliminado 🗑️");
   stopEdit();
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function renderHolidayList(){
@@ -708,7 +734,7 @@ function renderHolidayList(){
       renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
     });
   });
 }
@@ -730,7 +756,7 @@ function addHoliday(){
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function resetHolidaysForYear(){
@@ -744,7 +770,7 @@ function resetHolidaysForYear(){
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function saveQuotas(){
@@ -759,7 +785,7 @@ function saveQuotas(){
   renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 }
 
 function renderAll(){
@@ -772,8 +798,14 @@ function renderAll(){
 
 // --- Export / Import
 function exportJSON(){
-  const name = `vacaciones_data_${new Date().toISOString().slice(0,10)}.json`;
-  download(name, JSON.stringify(state, null, 2));
+  // En Windows (Chrome/Edge): si hay archivo activo, guardamos directamente ahí.
+  if(fileHandle && !isIOS && window.showOpenFilePicker){
+    saveToActiveFile({silent:false});
+    return;
+  }
+  // En iPhone/iPad o sin archivo activo: descarga para guardar manualmente en iCloud.
+  download("vacaciones_data.json", JSON.stringify(state, null, 2));
+  if(isIOS) toast("Guárdalo en iCloud y sobrescribe ✅");
 }
 
 function exportJSONFixedForICloud(){
@@ -792,16 +824,15 @@ async function quickWindowsSync(){
     await linkFile();
     toast("Archivo vinculado · Autoguardado activo ✅");
   }else{
-    await saveToLinkedFile();
+    await saveToActiveFile();
   }
 }
 
-function importJSON(file){
+function importJSONFile(file){
   const reader = new FileReader();
   reader.onload = () => {
     try{
       const s = JSON.parse(reader.result);
-      // minimal validate
       if(!s || typeof s !== "object") throw new Error("JSON inválido");
       if(!s.entries) s.entries = [];
       if(!s.holidays) s.holidays = {};
@@ -816,15 +847,61 @@ function importJSON(file){
       toast("Importado ✅");
       stopEdit();
       renderAll();
-
-// Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+      // En iOS el usuario debe exportar manualmente si modifica
+      showIOSExportHint(false);
+      // Aviso Windows: si no hay archivo activo, pedir import
+      showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
     }catch(e){
       console.error(e);
       alert("No se pudo importar. Asegúrate de que sea un JSON exportado por esta app.");
     }
   };
   reader.readAsText(file);
+}
+
+async function importJSONFromPicker(){
+  if(!window.showOpenFilePicker || isIOS){
+    // iOS u otros: usar selector tradicional
+    document.getElementById('file-import')?.click();
+    return;
+  }
+  try{
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      multiple: false,
+    });
+    if(!handle) return;
+    // Pedimos permiso lectura (y luego lectura/escritura para autoguardado)
+    if(handle.requestPermission){
+      const perm = await handle.requestPermission({mode:'readwrite'});
+      if(perm !== 'granted'){
+        const perm2 = await handle.requestPermission({mode:'read'});
+        if(perm2 !== 'granted') throw new Error('Permiso no concedido');
+      }
+    }
+    const file = await handle.getFile();
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    // Validar/migrar usando misma ruta
+    if(!parsed || typeof parsed !== 'object') throw new Error('JSON inválido');
+    if(!parsed.entries) parsed.entries = [];
+    if(!parsed.holidays) parsed.holidays = {};
+    if(!parsed.quotas) parsed.quotas = {};
+    YEARS.forEach(y=>{
+      if(!parsed.holidays[y]) parsed.holidays[y] = defaultHolidaysForYear(y);
+      if(!parsed.quotas[y]) parsed.quotas[y] = emptyYearQuotas();
+    });
+    state = parsed;
+    fileHandle = handle; // archivo activo → autoguardado
+    saveState();
+    await autoSaveIfLinked();
+    toast('Importado · Autoguardado activo ✅');
+    stopEdit();
+    renderAll();
+    showWinAutosaveHint(false);
+  }catch(e){
+    if(e?.name !== 'AbortError') console.error(e);
+  }
 }
 
 // --- Events
@@ -834,14 +911,14 @@ function wireEvents(){
     renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
   });
   monthSel.addEventListener("change", ()=>{
     stopEdit();
     renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
   });
 
   startEl.addEventListener("change", ()=>{
@@ -863,18 +940,19 @@ showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
   btnDelete.addEventListener("click", deleteEntry);
 
   el("#btn-export").addEventListener("click", exportJSON);
+  el("#btn-import").addEventListener("click", importJSONFromPicker);
   el("#file-import").addEventListener("change", (ev)=>{
     const f = ev.target.files?.[0];
-    if(f) importJSON(f);
+    if(f) importJSONFile(f);
     ev.target.value = "";
   });
 
-  el("#btn-open-file").addEventListener("click", linkFile);
-  el("#btn-save-file").addEventListener("click", saveToLinkedFile);
+  
+  
 
   // Atajos por plataforma
-  el("#btn-quick-ios").addEventListener("click", exportJSONFixedForICloud);
-  el("#btn-quick-win").addEventListener("click", quickWindowsSync);
+  
+  
 
   el("#btn-add-holiday").addEventListener("click", addHoliday);
   el("#btn-reset-holidays").addEventListener("click", resetHolidaysForYear);
@@ -897,5 +975,5 @@ wireEvents();
 renderAll();
 
 // Mini aviso (Windows Chrome) si no hay archivo vinculado
-showWinAutosaveHint(!!window.showSaveFilePicker && !fileHandle);
+showWinAutosaveHint(!!window.showOpenFilePicker && !fileHandle && !isIOS);
 
