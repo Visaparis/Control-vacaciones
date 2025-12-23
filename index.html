@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Control de Vacaciones</title>
+  <link rel="stylesheet" href="styles.css?v=5" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🗓️</div>
+      <div>
+        <div class="title">Control de Vacaciones</div>
+        <div class="subtitle">Local-first · 2026–2031 · Barcelona (editable)</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button class="btn ghost" id="btn-help">Ayuda</button>
+      <button class="btn ghost" id="btn-quick-ios" title="Atajo para iPhone/iPad (Safari): exporta el JSON con nombre fijo para guardarlo en iCloud">iPhone/iPad (Safari)</button>
+      <button class="btn ghost" id="btn-quick-win" title="Atajo para Windows (Chrome/Edge): vincula un JSON en tu nube y activa autoguardado">Windows (Chrome)</button>
+      <button class="btn ghost" id="btn-export" title="Exporta un JSON (puedes guardarlo en iCloud).">Exportar JSON</button>
+      <label class="btn ghost file">
+        Importar JSON
+        <input type="file" id="file-import" accept="application/json" />
+      </label>
+      <span class="divider"></span>
+      <button class="btn primary" id="btn-open-file" title="Chromium/Edge/Chrome: vincula un archivo JSON en tu nube para guardar con 1 clic">Vincular archivo</button>
+      <button class="btn primary" id="btn-save-file" disabled>Guardar</button>
+    </div>
+    <div id="win-autosave-hint" class="mini-hint hidden">Pulsa <strong>“Windows (Chrome)”</strong> para activar autoguardado</div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel">
+      <section class="card">
+        <div class="card-title">Periodo</div>
+        <div class="grid2">
+          <div class="field">
+            <label>Año</label>
+            <select id="year"></select>
+          </div>
+          <div class="field">
+            <label>Mes</label>
+            <select id="month"></select>
+          </div>
+        </div>
+        <div class="muted small">Selecciona un rango en el calendario (inicio → fin). Se cuentan solo <b>días laborables</b>, excluyendo fines de semana y festivos.</div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Saldo anual</div>
+        <div class="quota">
+          <div class="qrow">
+            <span class="pill vac">Vacaciones</span>
+            <span class="qnums"><b id="q-vac-used">0</b> / <span id="q-vac-total">23</span></span>
+            <span class="qleft" id="q-vac-left">23 restantes</span>
+          </div>
+          <div class="qrow">
+            <span class="pill free">Libre disp.</span>
+            <span class="qnums"><b id="q-free-used">0</b> / <span id="q-free-total">1</span></span>
+            <span class="qleft" id="q-free-left">1 restante</span>
+          </div>
+          <div class="qrow">
+            <span class="pill tele">Teletrabajo</span>
+            <span class="qnums"><b id="q-tele-used">0</b> / <span id="q-tele-total">2</span></span>
+            <span class="qleft" id="q-tele-left">2 restantes</span>
+          </div>
+          <div class="qrow">
+            <span class="pill legal">Legal</span>
+            <span class="qnums"><b id="q-legal-used">0</b> / ∞</span>
+            <span class="qleft muted">sin límite</span>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>Editar cupos</summary>
+          <div class="grid2">
+            <div class="field">
+              <label>Vacaciones</label>
+              <input type="number" id="set-vac" min="0" step="1" />
+            </div>
+            <div class="field">
+              <label>Libre disp.</label>
+              <input type="number" id="set-free" min="0" step="1" />
+            </div>
+            <div class="field">
+              <label>Teletrabajo</label>
+              <input type="number" id="set-tele" min="0" step="1" />
+            </div>
+          </div>
+          <button class="btn" id="btn-save-quotas">Guardar cupos</button>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Nuevo registro</div>
+
+        <div class="field">
+          <label>Tipo</label>
+          <select id="type">
+            <option value="vac">Vacaciones</option>
+            <option value="free">Libre disposición</option>
+            <option value="tele">Teletrabajo</option>
+            <option value="legal">Libre disposición legal</option>
+          </select>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label>Inicio</label>
+            <input type="date" id="start" />
+          </div>
+          <div class="field">
+            <label>Fin</label>
+            <input type="date" id="end" />
+          </div>
+        </div>
+
+        <div class="chipline">
+          <span class="chip" id="chip-count">0 días laborables</span>
+          <span class="chip ghost" id="chip-excluded">0 excluidos</span>
+        </div>
+
+        <div class="field">
+          <label>Notas</label>
+          <textarea id="note" rows="3" placeholder="Escribe aquí el motivo o detalles…"></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="btn-add">Guardar registro</button>
+          <button class="btn ghost" id="btn-cancel" hidden>Cancelar edición</button>
+          <button class="btn danger" id="btn-delete" hidden>Eliminar</button>
+        </div>
+
+        <div class="muted small">Si el rango incluye fines de semana o festivos, no cuentan.</div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Festivos</div>
+        <div class="muted small">Incluye un set típico España + Catalunya + Barcelona. Puedes añadir/quitar festivos por año.</div>
+
+        <div class="grid2">
+          <div class="field">
+            <label>Fecha</label>
+            <input type="date" id="h-date" />
+          </div>
+          <div class="field">
+            <label>Nombre</label>
+            <input type="text" id="h-name" placeholder="Ej: Puente, fiesta local…" />
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="btn-add-holiday">Añadir festivo</button>
+          <button class="btn ghost" id="btn-reset-holidays">Restaurar por defecto</button>
+        </div>
+        <div class="holiday-list" id="holiday-list"></div>
+      </section>
+    </aside>
+
+    <section class="content">
+      <div class="card big">
+        <div class="card-head">
+          <div>
+            <div class="card-title" id="cal-title">Calendario</div>
+            <div class="muted small" id="cal-subtitle"></div>
+          </div>
+          <div class="legend">
+            <span class="pill vac">Vacaciones</span>
+            <span class="pill free">Libre disp.</span>
+            <span class="pill tele">Teletrabajo</span>
+            <span class="pill legal">Legal</span>
+            <span class="pill hol">Festivo</span>
+          </div>
+        </div>
+        <div class="calendar" id="calendar"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Registros del año</div>
+            <div class="muted small">Toca un registro para editarlo.</div>
+          </div>
+          <div class="filters">
+            <input type="search" id="search" placeholder="Buscar en notas…" />
+          </div>
+        </div>
+        <div class="entries" id="entries"></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="help">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">Cómo usar</div>
+          <div class="muted small">Sin servidores · guardado local y opcionalmente en un archivo JSON vinculado (Chrome/Edge).</div>
+        </div>
+        <button class="btn ghost" id="btn-close-help">Cerrar</button>
+      </div>
+
+      <div class="modal-body">
+        <ol>
+          <li><b>Guárdalo en tu nube</b>: mete esta carpeta en OneDrive/iCloud/Drive.</li>
+          <li><b>Ábrelo</b>: abre <code>index.html</code> desde tu dispositivo (Windows/ iPhone/ iPad).</li>
+          <li><b>Crear un registro</b>: selecciona un rango en el calendario o pon fechas y pulsa “Guardar registro”.</li>
+          <li><b>Festivos</b>: están precargados, pero puedes añadir/quitar para que cuadre con tu calendario oficial anual.</li>
+          <li><b>Guardar datos</b>:
+            <ul>
+              <li>Siempre se guarda en el navegador (local). Si cambias de dispositivo, usa <b>Exportar JSON</b> y luego <b>Importar JSON</b>.</li>
+              <li>En <b>Chrome/Edge</b> (Windows/Mac/Android), usa <b>Vincular archivo</b> para guardar directamente en un JSON en tu nube con 1 clic.</li>
+            </ul>
+          </li>
+        </ol>
+
+        <p class="muted small">
+          Nota: los festivos oficiales (especialmente locales) pueden variar por año. Este sistema te deja ajustarlos sin complicaciones.
+        </p>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js?v=5"></script>
+</body>
+</html>
