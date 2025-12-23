@@ -819,10 +819,35 @@ function exportJSON(){
     saveToActiveFile({silent:false});
     return;
   }
-  // En iPhone/iPad o sin archivo activo: descarga para guardar manualmente en iCloud.
-  download("vacaciones_data.json", JSON.stringify(state, null, 2));
-  if(isIOS) toast("Guárdalo en iCloud y sobrescribe ✅");
+
+  const jsonText = JSON.stringify(state, null, 2);
+
+  // En iPhone/iPad (Safari/Chrome iOS): usar la hoja de compartir para poder elegir "Guardar en Archivos" (iCloud).
+  // iOS no permite elegir ruta directa desde una descarga normal.
+  if(isIOS && navigator.share){
+    try{
+      const blob = new Blob([jsonText], {type:"application/json"});
+      const file = new File([blob], "vacaciones_data.json", {type:"application/json"});
+
+      if(!navigator.canShare || navigator.canShare({files:[file]})){
+        navigator.share({
+          files: [file],
+          title: "Vacaciones",
+          text: "vacaciones_data.json"
+        });
+        toast("Elige “Guardar en Archivos” y selecciona iCloud ✅");
+        return;
+      }
+    }catch(e){
+      // Si falla, hacemos fallback a descarga normal.
+    }
+  }
+
+  // Fallback (sin share sheet o si falla): descarga para guardar manualmente.
+  download("vacaciones_data.json", jsonText);
+  if(isIOS) toast("Después: Compartir → Guardar en Archivos (iCloud) ✅");
 }
+
 
 function exportJSONFixedForICloud(){
   // Para iPhone/iPad/Safari lo más sencillo es exportar siempre con el mismo nombre,
