@@ -163,16 +163,32 @@ function saveState(){
 }
 
 function download(filename, text){
-  const blob = new Blob([text], {type:"application/json"});
+  const blob = new Blob([text], {type:"application/json;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+
+  // iOS/Safari tiene soporte irregular del atributo download en blobs.
+  // Abrimos en una pestaña nueva y retrasamos el revoke para que el usuario pueda guardar el archivo.
+  if(isIOS){
+    a.target = "_blank";
+    a.rel = "noopener";
+  }
+
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+
+  // No revocar inmediatamente en iOS, puede cancelar la descarga.
+  const revokeDelay = isIOS ? 30000 : 0;
+  if(revokeDelay){
+    setTimeout(()=>URL.revokeObjectURL(url), revokeDelay);
+  }else{
+    URL.revokeObjectURL(url);
+  }
 }
+
 
 // File System Access API (Chrome/Edge)
 let fileHandle = null;
